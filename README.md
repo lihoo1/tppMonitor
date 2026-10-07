@@ -74,6 +74,36 @@ targets: []                # 监控目标，也可在网页里加
 | 重启 | 双击 `restart.bat` |
 | 查看状态 | `start.bat status` |
 
+## Docker 部署
+
+适合 Linux 服务器 / NAS 长期运行。
+
+```bash
+git clone https://github.com/<你的用户名>/taopiaopiao-monitor.git
+cd taopiaopiao-monitor
+
+# 一键启动（自动构建镜像）
+docker compose up -d
+
+# 首次启动后编辑配置（webhook、票价白名单等），然后重启
+vi data/config.yaml
+docker compose restart
+
+# 看日志
+docker compose logs -f
+```
+
+- 配置和 SQLite 数据都持久化在宿主机 `./data/` 目录，删容器不丢数据
+- `restart: unless-stopped` 挂了自动拉起
+- Web 控制台：`http://服务器IP:8787`
+
+也可以不用 compose，直接 docker：
+
+```bash
+docker build -t taopiaopiao-monitor .
+docker run -d --name tpp -p 8787:8787 -v $(pwd)/data:/app/data --restart unless-stopped taopiaopiao-monitor
+```
+
 ## 文档
 
 - [扫描原理与接口说明](docs/扫描原理.md)：mtop H5 握手、签名算法、影院/排期接口字段、过滤逻辑
