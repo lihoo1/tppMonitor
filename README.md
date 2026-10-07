@@ -28,7 +28,7 @@
 ### 安装与启动
 
 ```bash
-git clone https://github.com/<你的用户名>/taopiaopiao-monitor.git
+git clone https://github.com/lihoo1/tppMonitor.git
 cd taopiaopiao-monitor
 
 # 双击 start.bat（自动建虚拟环境、装依赖、启动服务、打开浏览器）
@@ -79,7 +79,7 @@ targets: []                # 监控目标，也可在网页里加
 适合 Linux 服务器 / NAS 长期运行。
 
 ```bash
-git clone https://github.com/<你的用户名>/taopiaopiao-monitor.git
+git clone https://github.com/lihoo1/tppMonitor.git
 cd taopiaopiao-monitor
 
 # 一键启动（自动构建镜像）
