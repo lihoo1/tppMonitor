@@ -121,15 +121,15 @@ docker run -d --name tpp -p 8787:8787 -v $(pwd)/data:/app/data --restart unless-
 
 - **扫码进「全国路演信息分享群」**：群里同步工具更新、共享热门影片 ShowID、解答使用问题，也会第一时间同步各地路演放票信息
 
-  ![全国路演信息分享群](assets/微信群.jpg)
+  <img src="assets/微信群.jpg" width="260" alt="全国路演信息分享群">
 
 - **加我微信**：群二维码过期或想单独交流的，加我拉你进群
 
-  ![微信二维码](assets/微信.jpg)
+  <img src="assets/微信.jpg" width="260" alt="微信二维码">
 
 - **求赞助**：如果工具帮你抢到了心仪的路演票，欢迎请我喝杯咖啡 ☕
 
-  ![收款码](assets/收款码.jpg)
+  <img src="assets/收款码.jpg" width="260" alt="收款码">
 
 ## Star 历史
 
