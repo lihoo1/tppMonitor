@@ -1,0 +1,15 @@
+[Unit]
+Description=淘票票路演全天监控
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/taopiaopiao-monitor
+ExecStart=/opt/taopiaopiao-monitor/.venv/bin/python -m monitor
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>路演全天监控</title>
+  <style>
+    :root { color-scheme: light; }
+    body { margin: 0; font: 15px/1.5 "Segoe UI", "PingFang SC", sans-serif; background: #f4f1ea; color: #1c1915; }
+    header { padding: 20px 24px 8px; }
+    h1 { margin: 0; font-size: 22px; }
+    p.lead { margin: 6px 0 0; color: #5c564c; }
+    main { display: grid; gap: 16px; padding: 16px 24px 32px; max-width: 1100px; }
+    section { background: #fffdf8; border: 1px solid #e4dccb; border-radius: 12px; padding: 16px; }
+    h2 { margin: 0 0 12px; font-size: 16px; }
+    label { display: block; font-size: 13px; color: #5c564c; margin-bottom: 4px; }
+    input[type="text"], input[type="number"], input[type="password"], textarea, select {
+      width: 100%; box-sizing: border-box; border: 1px solid #d9d0c1; border-radius: 8px; padding: 8px 10px; font: inherit; background: #fff;
+    }
+    input[readonly], textarea[readonly] { background: #f4f1ea; color: #5c564c; }
+    textarea { min-height: 72px; resize: vertical; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .checks { display: flex; flex-wrap: wrap; gap: 16px; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #eee6d8; vertical-align: top; }
+    th { font-size: 13px; color: #5c564c; font-weight: 600; }
+    .row-actions, .bar { display: flex; gap: 8px; align-items: center; }
+    button { border: 0; border-radius: 8px; padding: 8px 12px; font: inherit; cursor: pointer; background: #1f6b4a; color: white; }
+    button.secondary { background: #efe8da; color: #1c1915; }
+    button.link { background: transparent; color: #8a3b2b; padding: 8px 4px; }
+    .msg { min-height: 1.4em; color: #1f6b4a; }
+    .msg.error { color: #8a3b2b; }
+    #login { max-width: 360px; }
+    .hidden { display: none; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>路演全天监控</h1>
+    <p class="lead">多部电影、多个城市在同一轮里一起扫。命中后发到企业微信群。</p>
+  </header>
+  <main>
+    <section id="login" class="hidden">
+      <h2>访问口令</h2>
+      <label for="token">口令</label>
+      <input id="token" type="password" autocomplete="current-password">
+      <div class="bar" style="margin-top:12px">
+        <button id="login-btn" type="button">进入</button>
+      </div>
+      <p id="login-msg" class="msg error"></p>
+    </section>
+    <form id="app" class="hidden">
+      <section>
+        <h2>扫描开关</h2>
+        <div class="checks">
+          <label><input id="enabled" type="checkbox"> 启用全天监控</label>
+          <label><input id="only-tags" type="checkbox"> 只扫见面会标签</label>
+          <label><input id="existing" type="checkbox"> 启动时处理已有场次</label>
+        </div>
+        <div class="grid">
+          <div>
+            <label for="prices">票价白名单（元，后台配置，仅展示）</label>
+            <input id="prices" type="text" readonly>
+          </div>
+        </div>
+      </section>
+      <section>
+        <h2>监控目标</h2>
+        <p class="lead">ShowID 全网唯一，不限城市搜片名，搜到就能用。</p>
+        <div class="bar" style="margin-bottom:12px">
+          <select id="show-city" style="max-width:180px"></select>
+          <input id="show-kw" type="text" placeholder="影片关键词，如 路演 / 片名">
+          <button id="show-search" type="button">查询 ShowID</button>
+        </div>
+        <div id="show-results" class="hidden" style="margin-bottom:12px">
+          <p class="lead" id="show-results-msg"></p>
+          <table>
+            <thead><tr><th>ShowID</th><th>影片名</th><th>标签</th><th>发现于</th><th></th></tr></thead>
+            <tbody id="show-results-body"></tbody>
+          </table>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ShowID</th>
+              <th>城市</th>
+              <th>日期</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="targets"></tbody>
+        </table>
+        <div class="bar" style="margin-top:12px">
+          <button id="add-row" class="secondary" type="button">添加一行</button>
+        </div>
+      </section>
+      <section>
+        <h2>企业微信</h2>
+        <p class="lead" id="hooks-info">群机器人 Webhook 由后台 config.yaml 配置，不在此展示。</p>
+      </section>
+      <section>
+        <div class="bar">
+          <button id="save" type="button">保存</button>
+          <span id="save-msg" class="msg"></span>
+        </div>
+      </section>
+      <section>
+        <h2>扫描状态</h2>
+        <table>
+          <thead>
+            <tr><th>ShowID</th><th>影片名</th><th>城市</th><th>日期</th><th>状态</th></tr>
+          </thead>
+          <tbody id="statuses"></tbody>
+        </table>
+      </section>
+      <section>
+        <h2>最近命中（50 条）</h2>
+        <table>
+          <thead>
+            <tr><th>城市</th><th>影院</th><th>影片</th><th>日期</th><th>开场</th><th>标签</th><th>票价</th><th>发现时间</th></tr>
+          </thead>
+          <tbody id="hits"></tbody>
+        </table>
+      </section>
+    </form>
+  </main>
+  <script>
+    const targetsBody = document.querySelector("#targets");
+    let dirty = false;
+    let formLoaded = false;
+    let cityNames = {};
+    let cityCodes = {};
+    let cityList = [];
+
+    function fillCitySelect(sel, selectedCode, withAll) {
+      sel.replaceChildren();
+      if (withAll) {
+        const all = document.createElement("option");
+        all.value = "";
+        all.textContent = "全部城市（不限）";
+        sel.appendChild(all);
+      } else {
+        const empty = document.createElement("option");
+        empty.value = "";
+        empty.textContent = "选择城市";
+        sel.appendChild(empty);
+      }
+      for (const city of cityList) {
+        const option = document.createElement("option");
+        option.value = city.code;
+        option.textContent = city.name;
+        sel.appendChild(option);
+      }
+      sel.value = selectedCode || "";
+    }
+
+    function addRow(row) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = "";
+      // show_id cell
+      const idTd = document.createElement("td");
+      const idInput = document.createElement("input");
+      idInput.type = "text";
+      idInput.dataset.name = "show_id";
+      idInput.value = row.show_id || "";
+      idInput.placeholder = "ShowID";
+      idInput.addEventListener("input", () => { dirty = true; });
+      idTd.appendChild(idInput);
+      tr.appendChild(idTd);
+      // city cell (select by Chinese name, code mapped automatically)
+      const cityTd = document.createElement("td");
+      const citySel = document.createElement("select");
+      citySel.dataset.name = "city_code";
+      fillCitySelect(citySel, row.city_code || "");
+      citySel.addEventListener("change", () => { dirty = true; });
+      cityTd.appendChild(citySel);
+      tr.appendChild(cityTd);
+      // date cell (date picker, YYYY-MM-DD)
+      const dateTd = document.createElement("td");
+      const dateInput = document.createElement("input");
+      dateInput.type = "date";
+      dateInput.dataset.name = "date";
+      dateInput.value = row.date || "";
+      dateInput.addEventListener("input", () => { dirty = true; });
+      dateTd.appendChild(dateInput);
+      tr.appendChild(dateTd);
+      // delete cell
+      const action = document.createElement("td");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "link";
+      button.textContent = "删除";
+      button.addEventListener("click", () => { dirty = true; tr.remove(); });
+      action.appendChild(button);
+      tr.appendChild(action);
+      targetsBody.appendChild(tr);
+    }
+
+    function readTargets() {
+      return [...targetsBody.querySelectorAll("tr")].map((tr) => {
+        const data = {};
+        tr.querySelectorAll("input, select").forEach((el) => { data[el.dataset.name] = el.value.trim(); });
+        data.city_name = cityNames[data.city_code] || "";
+        return data;
+      }).filter((row) => row.show_id || row.city_code || row.date);
+    }
+
+    function fillForm(config) {
+      document.querySelector("#enabled").checked = !!config.monitor_enabled;
+      document.querySelector("#only-tags").checked = !!config.only_meetup_tags;
+      document.querySelector("#existing").checked = !!config.process_existing_on_start;
+      document.querySelector("#prices").value = config.price_whitelist_yuan || "";
+      document.querySelector("#hooks-info").textContent =
+        "群机器人 Webhook 由后台 config.yaml 配置，不在此展示（当前已配置 " + (config.webhook_count || 0) + " 个）。";
+      cityNames = {};
+      cityCodes = {};
+      cityList = config.cities || [];
+      for (const city of cityList) {
+        cityNames[city.code] = city.name;
+        cityCodes[city.name] = city.code;
+      }
+      fillCitySelect(document.querySelector("#show-city"), "", true);
+      targetsBody.replaceChildren();
+      for (const row of config.targets || []) addRow(row);
+      if (!(config.targets || []).length) addRow({});
+      dirty = false;
+    }
+
+    function fillStatus(statuses) {
+      const body = document.querySelector("#statuses");
+      body.replaceChildren();
+      for (const row of statuses || []) {
+        const tr = document.createElement("tr");
+        for (const text of [row.show_id, row.show_name || "", row.city_name || row.city_code, row.date, row.status]) {
+          const td = document.createElement("td");
+          td.textContent = text || "";
+          tr.appendChild(td);
+        }
+        body.appendChild(tr);
+      }
+    }
+
+    function fillHits(hits) {
+      const body = document.querySelector("#hits");
+      body.replaceChildren();
+      for (const hit of hits || []) {
+        const tr = document.createElement("tr");
+        for (const text of [hit.city_name, hit.cinema_name, hit.show_name || hit.show_id, hit.show_date, hit.open_time, hit.tags, hit.price_yuan + "元", hit.created_at || ""]) {
+          const td = document.createElement("td");
+          td.textContent = text || "";
+          tr.appendChild(td);
+        }
+        body.appendChild(tr);
+      }
+    }
+
+    async function refresh() {
+      const response = await fetch("/api/state");
+      if (response.status === 401) {
+        document.querySelector("#login").classList.remove("hidden");
+        document.querySelector("#app").classList.add("hidden");
+        return;
+      }
+      const state = await response.json();
+      document.querySelector("#login").classList.add("hidden");
+      document.querySelector("#app").classList.remove("hidden");
+      if (!formLoaded) {
+        fillForm(state.config);
+        formLoaded = true;
+      }
+      fillStatus(state.statuses);
+      fillHits(state.hits);
+    }
+
+    document.querySelector("#add-row").addEventListener("click", () => { dirty = true; addRow({}); });
+    document.querySelector("#show-search").addEventListener("click", async () => {
+      const city = document.querySelector("#show-city").value.trim();
+      const kw = document.querySelector("#show-kw").value.trim();
+      const results = document.querySelector("#show-results");
+      const body = document.querySelector("#show-results-body");
+      const msg = document.querySelector("#show-results-msg");
+      if (!kw) { msg.textContent = "请填影片关键词"; results.classList.remove("hidden"); return; }
+      msg.textContent = city ? "查询中..." : "不限城市搜索中（扫热门票仓）...";
+      results.classList.remove("hidden");
+      const response = await fetch("/api/shows?city_code=" + encodeURIComponent(city) + "&keyword=" + encodeURIComponent(kw));
+      const data = await response.json();
+      body.replaceChildren();
+      if (!response.ok) { msg.textContent = data.error || "查询失败"; return; }
+      msg.textContent = "找到 " + (data.shows || []).length + " 部影片";
+      for (const show of data.shows || []) {
+        const tr = document.createElement("tr");
+        for (const text of [show.show_id, show.show_name, show.tags || "", show.found_city_name || ""]) {
+          const td = document.createElement("td");
+          td.textContent = text || "";
+          tr.appendChild(td);
+        }
+        const act = document.createElement("td");
+        const use = document.createElement("button");
+        use.type = "button";
+        use.textContent = "使用";
+        use.addEventListener("click", () => {
+          const useCity = city || show.found_city_code || "";
+          const first = targetsBody.querySelector("input[data-name='show_id']");
+          if (first && !first.value) {
+            first.value = show.show_id;
+            const sel = first.closest("tr").querySelector("select[data-name='city_code']");
+            if (sel && useCity) sel.value = useCity;
+            dirty = true;
+          } else {
+            addRow({ show_id: show.show_id, city_code: useCity });
+            dirty = true;
+          }
+        });
+        act.appendChild(use);
+        tr.appendChild(act);
+        body.appendChild(tr);
+      }
+    });
+    for (const id of ["enabled", "only-tags", "existing"]) {
+      document.querySelector("#" + id).addEventListener("input", () => { dirty = true; });
+      document.querySelector("#" + id).addEventListener("change", () => { dirty = true; });
+    }
+    document.querySelector("#login-btn").addEventListener("click", async () => {
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: document.querySelector("#token").value })
+      });
+      const body = await response.json();
+      document.querySelector("#login-msg").textContent = response.ok ? "" : (body.error || "口令不对");
+      if (response.ok) refresh();
+    });
+    document.querySelector("#save").addEventListener("click", async () => {
+      const msg = document.querySelector("#save-msg");
+      const payload = {
+        monitor_enabled: document.querySelector("#enabled").checked,
+        only_meetup_tags: document.querySelector("#only-tags").checked,
+        process_existing_on_start: document.querySelector("#existing").checked,
+        targets: readTargets()
+      };
+      const response = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        msg.className = "msg error";
+        msg.textContent = body.error || "保存失败";
+        return;
+      }
+      dirty = false;
+      msg.className = "msg";
+      msg.textContent = "已保存，下一轮扫描生效";
+      refresh();
+    });
+    refresh();
+    setInterval(refresh, 2000);
+  </script>
+</body>
+</html>
