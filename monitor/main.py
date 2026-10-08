@@ -31,7 +31,7 @@ def main() -> None:
     cfg = holder.get()
     store = Store(cfg.database)
     notices: queue.Queue = queue.Queue(maxsize=1000)
-    notifier = Notifier(notices, store, lambda: _wecom(holder))
+    notifier = Notifier(notices, store, lambda: _channels(holder))
     monitor = AllDayMonitor(holder, store, notices, MtopClient)
     web = WebApp(holder, store)
     stop = threading.Event()
@@ -58,8 +58,8 @@ def main() -> None:
         store.close()
         sys.exit(1)
     log.info("网页已打开 http://%s:%s", _display_host(cfg.listen_host), cfg.listen_port)
-    if not cfg.wecom.webhooks:
-        log.info("未配置企业微信 Webhook，命中只写在页面和日志里")
+    if not cfg.wecom.webhooks and not cfg.dingtalk.webhooks:
+        log.info("未配置企业微信或钉钉 Webhook，命中只写在页面和日志里")
     try:
         while not stop.wait(0.5):
             pass
@@ -72,9 +72,9 @@ def main() -> None:
         store.close()
 
 
-def _wecom(holder: ConfigHolder) -> tuple[tuple[str, ...], str]:
+def _channels(holder: ConfigHolder):
     cfg = holder.get()
-    return cfg.wecom.webhooks, cfg.wecom.wechat_id
+    return cfg.wecom.webhooks, cfg.dingtalk.webhooks, cfg.wecom.wechat_id
 
 
 def _display_host(host: str) -> str:

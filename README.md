@@ -63,6 +63,11 @@ wecom:
   webhooks:                # 企业微信群机器人 Webhook，仅后台可改
     - https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=你的KEY
   wechat_id: ""            # 你的微信号（推送文案里引导加好友）
+dingtalk:
+  webhooks:                # 钉钉群机器人，仅后台可改；加签时写成 url + secret
+    - https://oapi.dingtalk.com/robot/send?access_token=你的TOKEN
+    - url: https://oapi.dingtalk.com/robot/send?access_token=另一个TOKEN
+      secret: SECxxxx
 targets: []                # 监控目标，也可在网页里加
 ```
 
@@ -71,7 +76,7 @@ targets: []                # 监控目标，也可在网页里加
 1. **查 ShowID**：网页顶部选「全部城市」，输片名关键词（如「上海女儿」），点查询 → 点「使用」自动填入
 2. **选城市和日期**：下拉选城市，日期选择器选日期
 3. **保存**：下一轮扫描生效
-4. **等推送**：命中后企业微信群收到通知，含影院、场次、票价
+4. **等推送**：命中后企业微信群和钉钉群收到通知，含影院、场次、票价
 
 ### 常用命令
 

@@ -70,6 +70,7 @@ class WebApp:
             "price_whitelist_yuan": format_price_text(cfg.price_whitelist_fen),
             "wechat_id": cfg.wecom.wechat_id,
             "webhook_count": len(cfg.wecom.webhooks),
+            "dingtalk_webhook_count": len(cfg.dingtalk.webhooks),
             "targets": [
                 {
                     "show_id": item.show_id,
@@ -95,6 +96,12 @@ class WebApp:
             "wecom": {
                 "webhooks": list(current.wecom.webhooks),
                 "wechat_id": current.wecom.wechat_id,
+            },
+            "dingtalk": {
+                "webhooks": [
+                    {"url": item.url, "secret": item.secret} if item.secret else item.url
+                    for item in current.dingtalk.webhooks
+                ],
             },
             "monitor_enabled": bool(payload.get("monitor_enabled")),
             "only_meetup_tags": bool(payload.get("only_meetup_tags")),

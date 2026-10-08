@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
+import hmac
 import json
+import queue
 import urllib.error
 import urllib.parse
 import tempfile
@@ -12,8 +15,18 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from monitor.api import Cinema, dates_match, extract_hits, get_show_cinemas, price_matches
-from monitor.config import ConfigHolder, load_config, parse_price_text, save_config, to_fen as config_to_fen
+from monitor.api import Cinema, Hit, dates_match, extract_hits, get_show_cinemas, price_matches
+from monitor.config import (
+    ConfigHolder,
+    DingTalkConfig,
+    DingTalkHook,
+    config_from_dict,
+    load_config,
+    parse_price_text,
+    save_config,
+    to_fen as config_to_fen,
+)
+from monitor.notify import Notifier, dingtalk_signed_url
 from monitor.mtop import APP_KEY, is_token_empty, needs_new_token, parse_body, sign, token_from_m_h5_tk
 from monitor.scanner import AllDayMonitor, backoff_seconds, wave_sleep_seconds
 from monitor.store import Store
@@ -305,11 +318,101 @@ class OverlapClient:
         )
 
 
+class DingTalkTests(unittest.TestCase):
+    def test_sign_matches_dingtalk_formula(self):
+        secret = "SECtest"
+        timestamp = 1_600_000_000_000
+        url = "https://oapi.dingtalk.com/robot/send?access_token=abc"
+        signed = dingtalk_signed_url(url, secret, timestamp)
+        raw = f"{timestamp}\n{secret}".encode("utf-8")
+        digest = hmac.new(secret.encode("utf-8"), raw, hashlib.sha256).digest()
+        expect = urllib.parse.quote_plus(base64.b64encode(digest))
+        self.assertEqual(signed, f"{url}&timestamp={timestamp}&sign={expect}")
+        self.assertEqual(dingtalk_signed_url(url, ""), url)
+
+    def test_config_keeps_plain_url_and_signed_robot(self):
+        cfg = config_from_dict(
+            {
+                "listen_port": 8787,
+                "dingtalk": {
+                    "webhooks": [
+                        "https://oapi.dingtalk.com/robot/send?access_token=a",
+                        {"url": "https://oapi.dingtalk.com/robot/send?access_token=b", "secret": "SEC1"},
+                    ]
+                },
+            }
+        )
+        self.assertEqual(cfg.dingtalk.webhooks[0].secret, "")
+        self.assertEqual(cfg.dingtalk.webhooks[1].secret, "SEC1")
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "config.yaml"
+            save_config(path, cfg)
+            loaded = load_config(path)
+        self.assertEqual(loaded.dingtalk.webhooks[0].url, cfg.dingtalk.webhooks[0].url)
+        self.assertEqual(loaded.dingtalk.webhooks[1].secret, "SEC1")
+        with self.assertRaises(ValueError):
+            config_from_dict({"dingtalk": {"webhooks": ["http://oapi.dingtalk.com/robot/send?access_token=a"]}})
+
+    def test_send_posts_wecom_and_signed_dingtalk(self):
+        hit = Hit("上海", "310100", "c1", "影院", "100", "电影A", "s1", "2026-10-01", "19:30", "路演", 19900)
+        hook = DingTalkHook("https://oapi.dingtalk.com/robot/send?access_token=a", "SEC1")
+        client = _FakeClient(lambda _url, _body: {"errcode": 0})
+        notifier = Notifier(
+            queue.Queue(),
+            None,
+            lambda: (("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=k",), (hook,), "wx"),
+        )
+        ok = asyncio.run(notifier._send(client, hit))
+        self.assertTrue(ok)
+        self.assertEqual(len(client.calls), 2)
+        wecom_url, wecom_body = client.calls[0]
+        self.assertIn("qyapi.weixin.qq.com", wecom_url)
+        self.assertEqual(wecom_body["msgtype"], "markdown")
+        self.assertIn("影院", wecom_body["markdown"]["content"])
+        ding_url, ding_body = client.calls[1]
+        self.assertIn("timestamp=", ding_url)
+        self.assertIn("sign=", ding_url)
+        self.assertEqual(ding_body["markdown"]["title"], "路演场次")
+        self.assertIn("电影A", ding_body["markdown"]["text"])
+
+        failed = _FakeClient(lambda url, _body: {"errcode": 0 if "weixin" in url else 310000})
+        self.assertFalse(asyncio.run(notifier._send(failed, hit)))
+
+
+class _FakeClient:
+    def __init__(self, handler):
+        self.calls = []
+        self._handler = handler
+
+    async def post(self, url, json):
+        self.calls.append((url, json))
+        return _FakeResponse(self._handler(url, json))
+
+
+class _FakeResponse:
+    def __init__(self, body):
+        self._body = body
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._body
+
+
 class WebTests(unittest.TestCase):
     def test_save_targets_for_next_wave(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "config.yaml"
-            save_config(load_config_from_example(path), _empty_config(path))
+            from dataclasses import replace
+
+            seeded = replace(
+                _empty_config(path),
+                dingtalk=DingTalkConfig(
+                    (DingTalkHook("https://oapi.dingtalk.com/robot/send?access_token=t", "SEC1"),)
+                ),
+            )
+            save_config(path, seeded)
             holder = ConfigHolder(path)
             store = Store(str(Path(folder) / "t.sqlite3"))
             server = serve(WebApp(holder, store), "127.0.0.1", 0)
@@ -338,6 +441,7 @@ class WebTests(unittest.TestCase):
                 self.assertEqual(saved.price_whitelist_fen, (6900,))
                 self.assertEqual(saved.wecom.webhooks, ())
                 self.assertEqual(saved.wecom.wechat_id, "liwuhe2023")
+                self.assertEqual(saved.dingtalk.webhooks[0].secret, "SEC1")
                 reloaded = load_config(path)
                 self.assertEqual(len(reloaded.targets), 3)
             finally:
@@ -358,6 +462,7 @@ class WebTests(unittest.TestCase):
                 html = page.read().decode("utf-8")
                 self.assertIn("/assets/微信群.jpg", html)
                 self.assertIn("/assets/微信.jpg", html)
+                self.assertIn("钉钉", html)
                 image = urllib.request.urlopen(
                     "http://127.0.0.1:%s/assets/%s" % (port, urllib.parse.quote("微信群.jpg"))
                 )
@@ -380,7 +485,7 @@ def load_config_from_example(path: Path):
 
 
 def _empty_config(path: Path):
-    from monitor.config import AppConfig, WeComConfig
+    from monitor.config import AppConfig, DingTalkConfig, WeComConfig
 
     return AppConfig(
         listen_host="127.0.0.1",
@@ -393,6 +498,7 @@ def _empty_config(path: Path):
         price_whitelist_fen=(6900,),
         database="data/monitor.sqlite3",
         wecom=WeComConfig((), ""),
+        dingtalk=DingTalkConfig(()),
         targets=(),
     )
 

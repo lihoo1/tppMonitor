@@ -21,4 +21,6 @@ database: data/monitor.sqlite3
 wecom:
   webhooks: []
   wechat_id: ""
+dingtalk:
+  webhooks: []
 targets: []

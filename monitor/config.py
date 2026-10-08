@@ -108,6 +108,17 @@ class WeComConfig:
 
 
 @dataclass(frozen=True)
+class DingTalkHook:
+    url: str
+    secret: str
+
+
+@dataclass(frozen=True)
+class DingTalkConfig:
+    webhooks: tuple[DingTalkHook, ...]
+
+
+@dataclass(frozen=True)
 class AppConfig:
     listen_host: str
     listen_port: int
@@ -119,6 +130,7 @@ class AppConfig:
     price_whitelist_fen: tuple[int, ...]
     database: str
     wecom: WeComConfig
+    dingtalk: DingTalkConfig
     targets: tuple[Target, ...]
 
 
@@ -207,6 +219,7 @@ def config_from_dict(raw: dict) -> AppConfig:
         if not hook.startswith("https://"):
             raise ValueError("企业微信 Webhook 必须以 https:// 开头")
 
+    dingtalk = parse_dingtalk(raw.get("dingtalk") or {})
     targets = parse_targets(raw.get("targets") or [])
     database = str(raw.get("database") or "data/monitor.sqlite3")
     return AppConfig(
@@ -223,8 +236,34 @@ def config_from_dict(raw: dict) -> AppConfig:
             webhooks=webhooks,
             wechat_id=str(wecom_raw.get("wechat_id") or DEFAULT_WECHAT_ID).strip(),
         ),
+        dingtalk=dingtalk,
         targets=targets,
     )
+
+
+def parse_dingtalk(raw: object) -> DingTalkConfig:
+    if not isinstance(raw, dict):
+        raise ValueError("dingtalk 必须是映射")
+    hooks = raw.get("webhooks") or []
+    if isinstance(hooks, str):
+        hooks = [line.strip() for line in hooks.splitlines() if line.strip()]
+    if not isinstance(hooks, list):
+        raise ValueError("钉钉 webhooks 必须是列表")
+    parsed: list[DingTalkHook] = []
+    for item in hooks:
+        if isinstance(item, str):
+            url, secret = item.strip(), ""
+        elif isinstance(item, dict):
+            url = str(item.get("url") or item.get("webhook") or "").strip()
+            secret = str(item.get("secret") or "").strip()
+        else:
+            raise ValueError("钉钉 webhook 必须是地址或包含 url 的映射")
+        if not url:
+            continue
+        if not url.startswith("https://"):
+            raise ValueError("钉钉 Webhook 必须以 https:// 开头")
+        parsed.append(DingTalkHook(url, secret))
+    return DingTalkConfig(tuple(parsed))
 
 
 def _normalize_date(text: str) -> str:
@@ -290,6 +329,12 @@ def save_config(path: str | Path, cfg: AppConfig) -> None:
         "wecom": {
             "webhooks": list(cfg.wecom.webhooks),
             "wechat_id": cfg.wecom.wechat_id,
+        },
+        "dingtalk": {
+            "webhooks": [
+                {"url": item.url, "secret": item.secret} if item.secret else item.url
+                for item in cfg.dingtalk.webhooks
+            ],
         },
         "targets": [
             {

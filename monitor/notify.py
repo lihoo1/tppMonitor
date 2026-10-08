@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import hmac
 import logging
 import queue
 import threading
+import time
+import urllib.parse
 from typing import Any
 
 import httpx
 
 from monitor.api import Hit
+from monitor.config import DingTalkHook
 from monitor.store import Store
 
 log = logging.getLogger(__name__)
@@ -33,6 +39,18 @@ def format_hit(hit: Hit, wechat_id: str) -> str:
 
 def redact_webhook(url: str) -> str:
     return url.split("?", 1)[0]
+
+
+def dingtalk_signed_url(url: str, secret: str, timestamp_ms: int | None = None) -> str:
+    """钉钉加签：timestamp 与 secret 做 HMAC-SHA256，结果再 base64 后 URL 编码。"""
+    if not secret:
+        return url
+    timestamp = str(int(time.time() * 1000) if timestamp_ms is None else timestamp_ms)
+    string_to_sign = f"{timestamp}\n{secret}".encode("utf-8")
+    digest = hmac.new(secret.encode("utf-8"), string_to_sign, hashlib.sha256).digest()
+    sign = urllib.parse.quote_plus(base64.b64encode(digest))
+    joiner = "&" if "?" in url else "?"
+    return f"{url}{joiner}timestamp={timestamp}&sign={sign}"
 
 
 class Notifier:
@@ -65,28 +83,41 @@ class Notifier:
                     else:
                         self._store.release(item.cinema_id, item.schedule_id)
                 except Exception:
-                    log.exception("企业微信通知失败")
+                    log.exception("通知失败")
                     self._store.release(item.cinema_id, item.schedule_id)
 
     async def _send(self, client: httpx.AsyncClient, hit: Hit) -> bool:
-        webhooks, wechat_id = self._webhooks_getter()
+        webhooks, dingtalk_hooks, wechat_id = self._webhooks_getter()
         content = format_hit(hit, wechat_id)
-        if not webhooks:
+        if not webhooks and not dingtalk_hooks:
             log.info("命中（未配置 Webhook）\n%s", content)
             return True
-        results = await asyncio.gather(
-            *(self._post(client, url, content) for url in webhooks),
-            return_exceptions=True,
+        jobs: list[tuple[str, str, Any]] = [
+            ("企业微信", url, self._post_wecom(client, url, content)) for url in webhooks
+        ]
+        jobs.extend(
+            ("钉钉", hook.url, self._post_dingtalk(client, hook, content)) for hook in dingtalk_hooks
         )
+        results = await asyncio.gather(*(job for _, _, job in jobs), return_exceptions=True)
         ok = True
-        for url, result in zip(webhooks, results):
+        for (channel, url, _), result in zip(jobs, results):
             if isinstance(result, Exception) or result is False:
                 ok = False
-                log.error("企业微信通知失败 %s %s", redact_webhook(url), result)
+                log.error("%s通知失败 %s %s", channel, redact_webhook(url), result)
         return ok
 
-    async def _post(self, client: httpx.AsyncClient, url: str, content: str) -> bool:
+    async def _post_wecom(self, client: httpx.AsyncClient, url: str, content: str) -> bool:
         response = await client.post(url, json={"msgtype": "markdown", "markdown": {"content": content}})
+        response.raise_for_status()
+        body = response.json()
+        return body.get("errcode") == 0
+
+    async def _post_dingtalk(self, client: httpx.AsyncClient, hook: DingTalkHook, content: str) -> bool:
+        url = dingtalk_signed_url(hook.url, hook.secret)
+        response = await client.post(
+            url,
+            json={"msgtype": "markdown", "markdown": {"title": "路演场次", "text": content}},
+        )
         response.raise_for_status()
         body = response.json()
         return body.get("errcode") == 0

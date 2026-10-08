@@ -8,7 +8,6 @@ data/
 config.yaml
 *.log
 .stop-monitor
-assets/
 docs/
 tests/
 *.bat

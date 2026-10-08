@@ -42,7 +42,7 @@
 <body>
   <header>
     <h1>路演全天监控</h1>
-    <p class="lead">多部电影、多个城市在同一轮里一起扫。命中后发到企业微信群。</p>
+    <p class="lead">多部电影、多个城市在同一轮里一起扫。命中后发到企业微信群和钉钉群。</p>
   </header>
   <main>
     <section id="login" class="hidden">
@@ -102,6 +102,10 @@
       <section>
         <h2>企业微信</h2>
         <p class="lead" id="hooks-info">群机器人 Webhook 由后台 config.yaml 配置，不在此展示。</p>
+      </section>
+      <section>
+        <h2>钉钉</h2>
+        <p class="lead" id="dingtalk-info">群机器人 Webhook 由后台 config.yaml 配置，不在此展示。</p>
       </section>
       <section>
         <div class="bar">
@@ -231,6 +235,8 @@
       document.querySelector("#prices").value = config.price_whitelist_yuan || "";
       document.querySelector("#hooks-info").textContent =
         "群机器人 Webhook 由后台 config.yaml 配置，不在此展示（当前已配置 " + (config.webhook_count || 0) + " 个）。";
+      document.querySelector("#dingtalk-info").textContent =
+        "群机器人 Webhook 由后台 config.yaml 配置，不在此展示（当前已配置 " + (config.dingtalk_webhook_count || 0) + " 个）。";
       cityNames = {};
       cityCodes = {};
       cityList = config.cities || [];

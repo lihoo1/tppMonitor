@@ -7,6 +7,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY monitor/ monitor/
+COPY assets/ assets/
 COPY config.example.yaml .
 
 # 数据目录（SQLite + config.yaml），运行时挂卷持久化
