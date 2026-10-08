@@ -109,6 +109,7 @@ docker compose logs -f
 - 配置和 SQLite 数据都持久化在宿主机 `./data/` 目录，删容器不丢数据
 - `restart: unless-stopped` 挂了自动拉起
 - Web 控制台：`http://服务器IP:8787`
+- `assets/` 里是占位图。构建前换成自己的 `微信群.jpg`、`微信.jpg`，不要把私人二维码提交进仓库
 
 也可以不用 compose，直接 docker：
 
@@ -128,21 +129,13 @@ docker run -d --name tpp -p 8787:8787 -v $(pwd)/data:/app/data --restart unless-
 - SQLite 持久化
 - 淘票票 mtop H5 开放接口（无需登录）
 
-## 加群交流 & 赞助
+## 二维码占位图
 
-这个工具完全免费开源。如果对你有帮助，欢迎：
+`assets/微信群.jpg`、`assets/微信.jpg`、`assets/收款码.jpg` 只是占位图，用来占住页面和 README 的位置。部署前换成自己的图片，文件名保持不变。私人二维码不要提交进仓库。
 
-- **扫码进「全国路演信息分享群」**：群里同步工具更新、共享热门影片 ShowID、解答使用问题，也会第一时间同步各地路演放票信息
-
-  <img src="assets/微信群.jpg" width="260" alt="全国路演信息分享群">
-
-- **加我微信**：群二维码过期或想单独交流的，加我拉你进群
-
-  <img src="assets/微信.jpg" width="260" alt="微信二维码">
-
-- **求赞助**：如果工具帮你抢到了心仪的路演票，欢迎请我喝杯咖啡 ☕
-
-  <img src="assets/收款码.jpg" width="260" alt="收款码">
+<img src="assets/微信群.jpg" width="180" alt="群二维码占位图">
+<img src="assets/微信.jpg" width="180" alt="个人微信占位图">
+<img src="assets/收款码.jpg" width="180" alt="收款码占位图">
 
 ## Star 历史
 
