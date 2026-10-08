@@ -19,6 +19,11 @@ from monitor.store import Store
 
 log = logging.getLogger(__name__)
 PAGE = Path(__file__).with_name("static") / "index.html"
+ASSETS = Path(__file__).resolve().parent.parent / "assets"
+QR_FILES = {
+    "微信群.jpg": "image/jpeg",
+    "微信.jpg": "image/jpeg",
+}
 MAX_BODY = 1_000_000
 
 
@@ -139,6 +144,9 @@ def _handler_class(app: WebApp) -> type[BaseHTTPRequestHandler]:
                 body = PAGE.read_bytes()
                 self._send(200, "text/html; charset=utf-8", body)
                 return
+            if path.startswith("/assets/"):
+                self._asset(unquote(path[len("/assets/") :]))
+                return
             if path == "/api/state":
                 if not self._authorized():
                     self._json(401, {"error": "需要口令"})
@@ -202,6 +210,17 @@ def _handler_class(app: WebApp) -> type[BaseHTTPRequestHandler]:
                 self._json(200, {"ok": True})
                 return
             self._json(404, {"error": "没有这个接口"})
+
+        def _asset(self, name: str) -> None:
+            content_type = QR_FILES.get(name)
+            if content_type is None or "/" in name or "\\" in name:
+                self._json(404, {"error": "没有这个图片"})
+                return
+            file_path = (ASSETS / name).resolve()
+            if not file_path.is_relative_to(ASSETS.resolve()) or not file_path.is_file():
+                self._json(404, {"error": "没有这个图片"})
+                return
+            self._send(200, content_type, file_path.read_bytes())
 
         def _authorized(self) -> bool:
             return app.allowed(self._session())

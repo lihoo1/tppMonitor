@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import urllib.error
+import urllib.parse
 import tempfile
 import threading
 import unittest
@@ -339,6 +340,35 @@ class WebTests(unittest.TestCase):
                 self.assertEqual(saved.wecom.wechat_id, "liwuhe2023")
                 reloaded = load_config(path)
                 self.assertEqual(len(reloaded.targets), 3)
+            finally:
+                server.shutdown()
+                server.server_close()
+                store.close()
+
+    def test_group_qr_is_served(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "config.yaml"
+            save_config(path, _empty_config(path))
+            holder = ConfigHolder(path)
+            store = Store(str(Path(folder) / "t.sqlite3"))
+            server = serve(WebApp(holder, store), "127.0.0.1", 0)
+            port = server.server_address[1]
+            try:
+                page = urllib.request.urlopen(f"http://127.0.0.1:{port}/")
+                html = page.read().decode("utf-8")
+                self.assertIn("/assets/微信群.jpg", html)
+                self.assertIn("/assets/微信.jpg", html)
+                image = urllib.request.urlopen(
+                    "http://127.0.0.1:%s/assets/%s" % (port, urllib.parse.quote("微信群.jpg"))
+                )
+                body = image.read()
+                self.assertEqual(image.status, 200)
+                self.assertTrue(image.headers["Content-Type"].startswith("image/jpeg"))
+                self.assertGreater(len(body), 1000)
+                missing = urllib.request.Request(f"http://127.0.0.1:{port}/assets/../config.yaml")
+                with self.assertRaises(urllib.error.HTTPError) as caught:
+                    urllib.request.urlopen(missing)
+                self.assertEqual(caught.exception.code, 404)
             finally:
                 server.shutdown()
                 server.server_close()

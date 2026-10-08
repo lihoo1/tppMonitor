@@ -32,6 +32,10 @@
     .msg.error { color: #8a3b2b; }
     #login { max-width: 360px; }
     .hidden { display: none; }
+    .qr-row { display: flex; flex-wrap: wrap; gap: 24px; }
+    .qr-card { width: 110px; }
+    .qr-card img { width: 110px; height: 110px; object-fit: contain; background: #fff; border: 1px solid #e4dccb; border-radius: 8px; }
+    .qr-card p { margin: 8px 0 0; }
     @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -124,6 +128,20 @@
         </table>
       </section>
     </form>
+    <section>
+      <h2>扫码加群</h2>
+      <p class="lead">进群后可以第一时间收到路演开售通知。群二维码过期时，加微信拉你进群。</p>
+      <div class="qr-row">
+        <div class="qr-card">
+          <img src="/assets/微信群.jpg" alt="全国路演信息分享群二维码">
+          <p>全国路演信息分享群</p>
+        </div>
+        <div class="qr-card">
+          <img src="/assets/微信.jpg" alt="微信二维码">
+          <p>加微信，群码过期时拉你进群</p>
+        </div>
+      </div>
+    </section>
   </main>
   <script>
     const targetsBody = document.querySelector("#targets");
