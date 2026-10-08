@@ -462,7 +462,8 @@ class WebTests(unittest.TestCase):
                 html = page.read().decode("utf-8")
                 self.assertIn("/assets/微信群.jpg", html)
                 self.assertIn("/assets/微信.jpg", html)
-                self.assertIn("钉钉", html)
+                self.assertNotIn("企业微信", html)
+                self.assertNotIn("钉钉", html)
                 image = urllib.request.urlopen(
                     "http://127.0.0.1:%s/assets/%s" % (port, urllib.parse.quote("微信群.jpg"))
                 )
