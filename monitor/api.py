@@ -70,6 +70,31 @@ def has_meetup(text: str) -> bool:
     return any(tag in text for tag in MEETUP_TAGS)
 
 
+def schedule_tag_text(raw: Any) -> str:
+    """场次标签。字典只取展示名，避免把优惠明细整段拼进标签后误判见面会。"""
+    if raw is None or raw == "":
+        return ""
+    if isinstance(raw, str):
+        return raw
+    if isinstance(raw, list):
+        return "".join(schedule_tag_text(item) for item in raw)
+    if not isinstance(raw, dict):
+        return ""
+    parts: list[str] = []
+    for key in ("tagName", "tag", "scheduleTag", "showTag", "activityTag", "tinyTag"):
+        value = raw.get(key)
+        if isinstance(value, str) and value:
+            parts.append(value)
+    for item in raw.get("tagList") or []:
+        if isinstance(item, dict):
+            name = item.get("tagName") or item.get("tag") or ""
+            if name:
+                parts.append(str(name))
+        elif item:
+            parts.append(str(item))
+    return "".join(parts)
+
+
 def price_matches(price_fen: int, whitelist: tuple[int, ...]) -> bool:
     return any(abs(price_fen - item) <= PRICE_TOLERANCE_FEN for item in whitelist)
 
@@ -446,6 +471,7 @@ def extract_hits(
         days = []
 
     hits: list[Hit] = []
+    saw_target_session = False
     for day in days:
         if not isinstance(day, dict):
             continue
@@ -455,6 +481,7 @@ def extract_hits(
         for session in day.get("scheduleVos") or []:
             if not isinstance(session, dict):
                 continue
+            saw_target_session = True
             schedule_id = str(session.get("scheduleId") or "").strip()
             if not schedule_id:
                 continue
@@ -465,12 +492,12 @@ def extract_hits(
             if price_raw is None or price_raw == "":
                 price_raw = session.get("memberTradePrice")
             price_fen = _to_int(price_raw)
-            schedule_tag = str(session.get("scheduleTag") or "")
-            combined = f"{cinema.tag_text}{special_tag}{schedule_tag}"
-            if only_meetup_tags and not has_meetup(combined):
+            # 影院列表上的「明星见面会」只说明这家可能有见面会，不能让当天普通场次免票价检查。
+            label = f"{special_tag}{schedule_tag_text(session.get('scheduleTag'))}"
+            if only_meetup_tags and not has_meetup(label):
                 if not whitelist or not price_matches(price_fen, whitelist):
                     continue
-                combined = f"{combined}白名单票价"
+                label = f"{label}白名单票价"
             hits.append(
                 _hit(
                     city_name,
@@ -481,12 +508,12 @@ def extract_hits(
                     schedule_id,
                     show_date,
                     str(open_time),
-                    combined,
+                    label,
                     price_fen,
                 )
             )
 
-    if hits or not has_meetup(cinema.tag_text) or not _show_present(schedule, show_id):
+    if hits or saw_target_session or not has_meetup(cinema.tag_text) or not _show_present(schedule, show_id):
         return hits
     return [
         _hit(

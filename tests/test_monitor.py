@@ -100,6 +100,31 @@ class FilterTests(unittest.TestCase):
         self.assertEqual(len(hits), 1)
         self.assertNotIn("白名单票价", hits[0].tags)
 
+    def test_cinema_meetup_tag_does_not_keep_ordinary_sessions(self):
+        cinema = Cinema("c1", "未知激光影城未来汇店", "15:10", "明星见面会特惠可停车小食巨幕厅")
+        schedule = self._schedule(
+            2180,
+            {
+                "activityTag": "新人活动",
+                "cardActivityTag": "影城卡价",
+                "cardDiscountTag": "已优惠¥5.1",
+                "tagList": [{"tagName": "新人价", "tagType": "1"}],
+                "tinyTag": "惠",
+            },
+        )
+        hits = extract_hits(schedule, cinema, **self._args())
+        self.assertEqual(hits, [])
+
+    def test_session_activity_dict_with_meetup_name_still_hits(self):
+        hits = extract_hits(
+            self._schedule(2180, {"tagList": [{"tagName": "明星见面会"}], "tinyTag": "惠"}),
+            self.cinema,
+            **self._args(),
+        )
+        self.assertEqual(len(hits), 1)
+        self.assertIn("明星见面会", hits[0].tags)
+        self.assertNotIn("activityTag", hits[0].tags)
+
     def test_other_show_is_not_mixed_in(self):
         schedule = self._schedule(19900, "路演")
         schedule["showScheduleMap"]["other"] = schedule["showScheduleMap"]["100"]
